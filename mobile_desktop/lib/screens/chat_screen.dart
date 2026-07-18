@@ -18,6 +18,7 @@ import '../services/voice_preference.dart';
 import '../utils/date_format.dart';
 import 'attachment_sheet.dart';
 import 'audio_record_screen.dart';
+import 'live_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final Conversation conversation;
@@ -653,6 +654,15 @@ class _ChatScreenState extends State<ChatScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.videocam_outlined),
+            tooltip: 'Canlı Ahlas',
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => LiveScreen(conversation: widget.conversation),
+              ));
+            },
+          ),
           Consumer<VoicePreference>(
             builder: (context, pref, _) {
               return PopupMenuButton<String>(

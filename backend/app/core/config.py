@@ -33,6 +33,25 @@ class Settings:
     # TTS — Edge-TTS Türkçe ses
     TTS_VOICE: str = os.getenv("TTS_VOICE", "tr-TR-EmelNeural")
 
+    # Gemini Live (WebSocket, duplex ses + kamera)
+    GEMINI_LIVE_MODEL: str = os.getenv(
+        "GEMINI_LIVE_MODEL", "models/gemini-2.5-flash-native-audio-preview-09-2025"
+    )
+    # Live API prebuilt voices: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
+    # Multilingual — Puck nötr ve akıcı.
+    GEMINI_LIVE_VOICE: str = os.getenv("GEMINI_LIVE_VOICE", "Puck")
+
+    # Ahlas persona
+    AHLAS_SYSTEM_INSTRUCTION: str = os.getenv(
+        "AHLAS_SYSTEM_INSTRUCTION",
+        (
+            "Sen Ahlas'sın — Iron Man'in JARVIS'inden esinlenilmiş kişisel "
+            "yapay zeka asistanısın. Sahibin Nejdet Tut. Türkçe konuşursun. "
+            "Kısa, doğal, samimi ve nazik cevaplar verirsin. Kamera açıksa "
+            "gördüğün sahneyi analiz eder, kullanıcının sorularını yanıtlarsın."
+        ),
+    )
+
     # Sohbet geçmişi context boyutu (Gemini/Groq'a taşınacak mesaj sayısı)
     MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
 

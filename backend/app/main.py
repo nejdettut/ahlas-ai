@@ -15,7 +15,7 @@ from app.core.errors import (
     generic_exception_handler,
     validation_error_handler,
 )
-from app.routers import conversations, health, media
+from app.routers import conversations, health, live, media
 
 app = FastAPI(
     title="Ahlas API",
@@ -42,6 +42,7 @@ app.add_exception_handler(Exception, generic_exception_handler)
 app.include_router(health.router, prefix=settings.API_PREFIX)
 app.include_router(conversations.router, prefix=settings.API_PREFIX)
 app.include_router(media.router, prefix=settings.API_PREFIX)
+app.include_router(live.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")
