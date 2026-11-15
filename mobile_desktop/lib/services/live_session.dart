@@ -63,11 +63,21 @@ class LiveSession extends ChangeNotifier {
 
   bool get isConnected => _state == LiveConnectionState.connected;
 
+  // Reconnect için: son kullanılan credential'ları sakla + manuel close bayrağı
+  String? _lastToken;
+  String? _lastVoice;
+  bool _closedByUser = false;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 3;
+
   Future<void> connect({required String token, String? voice}) async {
     if (_state == LiveConnectionState.connecting ||
         _state == LiveConnectionState.connected) {
       return;
     }
+    _lastToken = token;
+    _lastVoice = voice;
+    _closedByUser = false;
     _setState(LiveConnectionState.connecting);
 
     // baseUrl: http(s)://... → ws(s)://...
@@ -95,6 +105,23 @@ class LiveSession extends ChangeNotifier {
     }
   }
 
+  /// WS beklenmedik düşerse (kullanıcı close demediyse) exponential
+  /// backoff ile yeniden bağlanmayı dene. 3 denemeden sonra vazgeç.
+  Future<void> _attemptReconnect() async {
+    final token = _lastToken;
+    if (_closedByUser || token == null) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _errorMessage = 'Bağlantı kesildi. Lütfen ekranı yeniden aç.';
+      _setState(LiveConnectionState.error);
+      return;
+    }
+    _reconnectAttempts += 1;
+    final delaySec = 1 << (_reconnectAttempts - 1); // 1s, 2s, 4s
+    await Future<void>.delayed(Duration(seconds: delaySec));
+    if (_closedByUser) return;
+    await connect(token: token, voice: _lastVoice);
+  }
+
   void _onMessage(dynamic data) {
     if (data is! String) return;
     try {
@@ -104,6 +131,7 @@ class LiveSession extends ChangeNotifier {
         case 'info':
           if (msg['message'] == 'connected') {
             _setState(LiveConnectionState.connected);
+            _reconnectAttempts = 0; // başarılı → sayaç sıfırla
           }
           break;
         case 'audio':
@@ -143,7 +171,13 @@ class LiveSession extends ChangeNotifier {
   }
 
   void _onDone() {
+    _channel = null;
     _setState(LiveConnectionState.disconnected);
+    // Kullanıcı kapatmadıysa yeniden bağlanmayı dene (backend WS düşerse
+    // güvenlik ağı). Backend fix'inden sonra bu normalde tetiklenmez.
+    if (!_closedByUser) {
+      _attemptReconnect();
+    }
   }
 
   void _send(Map<String, dynamic> payload) {
@@ -188,6 +222,7 @@ class LiveSession extends ChangeNotifier {
   }
 
   Future<void> close() async {
+    _closedByUser = true;
     try {
       await _channel?.sink.close();
     } catch (_) {}

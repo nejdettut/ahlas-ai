@@ -127,49 +127,60 @@ async def live_session(
                     log.warning("client_to_gemini error: %s", exc)
 
             async def gemini_to_client():
-                """Gemini'den gelen mesajları client'a yönlendir."""
+                """Gemini'den gelen mesajları client'a yönlendir.
+
+                google-genai Live SDK'da ``session.receive()`` bir async generator
+                döndürür ve her TURN sonunda biter (turn_complete bayrağıyla).
+                Çoklu turn için dış ``while True`` ile sarıp her turn sonrasında
+                yeni ``receive()`` iterator'ı açılmalı. Aksi hâlde ilk turn'den
+                sonra generator exit → task complete → FIRST_COMPLETED tetikler
+                → oturum kapanır → "tek seferlik sohbet" bug'ı.
+                """
                 try:
-                    async for reply in session.receive():
-                        # Ses parçası
-                        data = getattr(reply, "data", None)
-                        if data:
-                            await websocket.send_json({
-                                "type": "audio",
-                                "data": base64.b64encode(data).decode("ascii"),
-                            })
-                        # Metin (transcript veya modelin text output'u)
-                        text = getattr(reply, "text", None)
-                        if text:
-                            await websocket.send_json({
-                                "type": "transcript",
-                                "role": "assistant",
-                                "text": text,
-                            })
-                        # server_content bayrakları + transkript alanları
-                        sc = getattr(reply, "server_content", None)
-                        if sc is not None:
-                            inp_tr = getattr(sc, "input_transcription", None)
-                            if inp_tr and getattr(inp_tr, "text", None):
+                    while True:
+                        async for reply in session.receive():
+                            # Ses parçası
+                            data = getattr(reply, "data", None)
+                            if data:
                                 await websocket.send_json({
-                                    "type": "transcript",
-                                    "role": "user",
-                                    "text": inp_tr.text,
+                                    "type": "audio",
+                                    "data": base64.b64encode(data).decode("ascii"),
                                 })
-                            out_tr = getattr(sc, "output_transcription", None)
-                            if out_tr and getattr(out_tr, "text", None):
+                            # Metin (transcript veya modelin text output'u)
+                            text = getattr(reply, "text", None)
+                            if text:
                                 await websocket.send_json({
                                     "type": "transcript",
                                     "role": "assistant",
-                                    "text": out_tr.text,
+                                    "text": text,
                                 })
-                            if getattr(sc, "turn_complete", False):
-                                await websocket.send_json(
-                                    {"type": "turn_complete"}
-                                )
-                            if getattr(sc, "interrupted", False):
-                                await websocket.send_json(
-                                    {"type": "interrupted"}
-                                )
+                            # server_content bayrakları + transkript alanları
+                            sc = getattr(reply, "server_content", None)
+                            if sc is not None:
+                                inp_tr = getattr(sc, "input_transcription", None)
+                                if inp_tr and getattr(inp_tr, "text", None):
+                                    await websocket.send_json({
+                                        "type": "transcript",
+                                        "role": "user",
+                                        "text": inp_tr.text,
+                                    })
+                                out_tr = getattr(sc, "output_transcription", None)
+                                if out_tr and getattr(out_tr, "text", None):
+                                    await websocket.send_json({
+                                        "type": "transcript",
+                                        "role": "assistant",
+                                        "text": out_tr.text,
+                                    })
+                                if getattr(sc, "turn_complete", False):
+                                    await websocket.send_json(
+                                        {"type": "turn_complete"}
+                                    )
+                                if getattr(sc, "interrupted", False):
+                                    await websocket.send_json(
+                                        {"type": "interrupted"}
+                                    )
+                        # async for tamamlandı — turn bitti, bir sonraki turn için
+                        # döngü yeniden başlıyor ve session.receive() tekrar çağrılıyor.
                 except Exception as exc:
                     log.warning("gemini_to_client error: %s", exc)
 
